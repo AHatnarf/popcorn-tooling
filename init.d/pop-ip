@@ -1,0 +1,10 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides:          popcorn-networking
+# Required-Start:    networking
+# Required-Stop:
+# Default-Start:     2
+# Default-Stop:
+# Short-Description: Set the popcorn IP addresses.
+### END INIT INFO
+ifconfig eth1 $(cat /proc/cmdline | grep ip | cut -d '=' -f 4) netmask 255.255.255.0 up
