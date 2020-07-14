@@ -3,6 +3,9 @@ test:
   devices:
     - /dev/net/tun
     - /dev/kvm
+  environment:
+    - NUMNODES=2
+    - INTERACTIVE=1
   ports:
     # Expose gdb debugger ports
     - 1230:1230
@@ -11,10 +14,9 @@ test:
     - 1236:1236
     - 1237:1237
   volumes:
-    - /home/popcorn/popcorn-kernel:/app/linux
-    - /home/popcorn/popcorn-kernel-lib:/app/popcorn-lib
+    - /home/popcorn/gitlab/rfc/popcorn-kernel:/app/linux
+    - /home/popcorn/gitlab/rfc/popcorn-kernel-lib:/app/popcorn-lib
     - /home/popcorn/disks:/app/disks
     - /home/popcorn/ccache:/app/ccache
-    - /home/popcorn/compile.sh:/app/compile.sh
     - /home/popcorn/logs:/app/logs
   privileged: true
