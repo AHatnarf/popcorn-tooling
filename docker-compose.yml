@@ -15,8 +15,9 @@ test:
     - 1236:1236
     - 1237:1237
   volumes:
-    - /home/popcorn/gitlab/rfc/popcorn-kernel:/app/linux
-    - /home/popcorn/gitlab/rfc/popcorn-kernel-lib:/app/popcorn-lib
+    - /home/popcorn/share:/app/share
+    - /home/popcorn/popcorn-kernel:/app/linux
+    - /home/popcorn/popcorn-kernel-lib:/app/popcorn-lib
     - /home/popcorn/disks:/app/disks
     - /home/popcorn/ccache:/app/ccache
     - /home/popcorn/logs:/app/logs

@@ -21,7 +21,7 @@ fi
 
 # Run build tests
 echo "Compiling the kernel"
-cd linux
+cd linux #&& make clean -j$(nproc) &> /dev/null
 make CCACHE_DIR=/app/ccache CC="ccache gcc" -j$(nproc) &> /app/logs/kernel_compiliation
 EXITCODE=$?
 test $EXITCODE -eq 0 && echo "Kernel compiliation successful!" || exit -1;
@@ -69,6 +69,7 @@ done
 # Build popcorn-lib - note that make is currently single threaded (race condition)
 echo "Building popcorn-lib"
 cd /app/popcorn-lib
+#make clean -j$(nproc) &> /dev/null && 
 make CCACHE_DIR=/app/ccache CC='ccache gcc' -j1 &> /app/logs/lib_compiliation
 EXITCODE=$?
 test $EXITCODE -eq 0 && echo "Popcorn-lib compiliation successful!" || exit -3;
@@ -83,17 +84,30 @@ done
 
 sleep 2
 
-# Insert modules and run popcorn tests
+# Set up NFS server
+echo "/app/share 10.4.4.0/24(rw,fsid=0,insecure,no_subtree_check,async)" | sudo tee -a /etc/exports
+sudo service rpcbind restart
+sudo service nfs-kernel-server restart
+
+# Trust fingerprint of each node
 for ((i=0; i <= $NUMNODES; i++)); do
-  sshpass -p "popcorn" scp -o StrictHostKeyChecking=no /app/linux/drivers/msg_layer/msg_socket.ko popcorn@10.4.4.$((100+${i})):/home/popcorn
-  sshpass -p "popcorn" scp -o StrictHostKeyChecking=no -r /app/popcorn-lib popcorn@10.4.4.$((100+${i})):/home/popcorn
-  sshpass -p "popcorn" scp -o StrictHostKeyChecking=no -r /app/nodes popcorn@10.4.4.$((100+${i})):/etc/popcorn/nodes
-  sshpass -p "popcorn" ssh -o StrictHostKeyChecking=no  popcorn@10.4.4.$((100+${i})) "sudo insmod msg_socket.ko" &
+  sshpass -p "popcorn" ssh -o StrictHostKeyChecking=no  popcorn@10.4.4.$((100+${i})) "mkdir /home/popcorn/test"
 done
 
-echo -e "Running tests\n=============="
+
+# Set up files in VMs
 cd /app
+cp -r /app/popcorn-lib /app/share/popcorn-lib
+mv /app/nodes /app/share/nodes
+cp /app/linux/drivers/msg_layer/msg_socket.ko /app/share/msg_socket.ko
+
+ansible-playbook -e "ansible_ssh_pass=popcorn" nfs_deploy.yml
+
+
+# Run tests
+echo -e "Running tests\n=============="
 ansible-playbook -e "ansible_ssh_pass=popcorn" popcorn_tests.yml
+
 
 # Wait at the end for interactive testing
 if ! [[ -z "$INTERACTIVE" ]]
