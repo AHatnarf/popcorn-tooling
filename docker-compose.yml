@@ -5,7 +5,8 @@ test:
     - /dev/kvm
   environment:
     - NUMNODES=2
-    - INTERACTIVE=1
+    # Optional: uncomment to interact with nodes after tests
+    #- INTERACTIVE=1
   ports:
     # Expose gdb debugger ports
     - 1230:1230
@@ -19,4 +20,6 @@ test:
     - /home/popcorn/disks:/app/disks
     - /home/popcorn/ccache:/app/ccache
     - /home/popcorn/logs:/app/logs
+    # Optional: supply custom test cases via ansible playbook
+    # - /home/popcorn/popcorn_tests.yml:/app/popcorn_tests.yml
   privileged: true

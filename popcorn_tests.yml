@@ -1,0 +1,27 @@
+- name: "Check to see if all nodes are online"
+  hosts: all
+  remote_user: popcorn
+  vars:
+    ansible_become_pass: popcorn
+
+  tasks:
+    - name: "Test connection to all nodes"
+      ping:
+
+- name: "Run functional tests from node 0"
+  hosts: 10.4.4.100
+  remote_user: popcorn
+
+  tasks:
+    - name: FT2A
+      shell: /home/popcorn/popcorn-lib/src/ft2a 0 1
+      changed_when: False
+
+    - name: FT2B
+      shell: /home/popcorn/popcorn-lib/src/ft2b 0 1
+      changed_when: False
+
+    - name: FT2C
+      shell: /home/popcorn/popcorn-lib/src/ft2c 0 1
+      changed_when: False
+

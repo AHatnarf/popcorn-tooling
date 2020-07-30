@@ -21,7 +21,7 @@ fi
 
 # Run build tests
 echo "Compiling the kernel"
-cd linux && make clean -j$(nproc) &> /dev/null
+cd linux
 make CCACHE_DIR=/app/ccache CC="ccache gcc" -j$(nproc) &> /app/logs/kernel_compiliation
 EXITCODE=$?
 test $EXITCODE -eq 0 && echo "Kernel compiliation successful!" || exit -1;
@@ -43,6 +43,9 @@ echo "" > /app/nodes
 for ((i=0; i <= $NUMNODES; i++)); do
   echo "10.4.4.$(($i+100))" >> /app/nodes
 done
+
+sudo mkdir -p /etc/ansible
+sudo cp /app/nodes /etc/ansible/hosts
 
 # Start Virtual Machines & Networking
 echo "Starting virtual machines"
@@ -66,7 +69,7 @@ done
 # Build popcorn-lib - note that make is currently single threaded (race condition)
 echo "Building popcorn-lib"
 cd /app/popcorn-lib
-make clean -j$(nproc) &> /dev/null && make CCACHE_DIR=/app/ccache CC='ccache gcc' -j1 &> /app/logs/lib_compiliation
+make CCACHE_DIR=/app/ccache CC='ccache gcc' -j1 &> /app/logs/lib_compiliation
 EXITCODE=$?
 test $EXITCODE -eq 0 && echo "Popcorn-lib compiliation successful!" || exit -3;
 
@@ -88,23 +91,9 @@ for ((i=0; i <= $NUMNODES; i++)); do
   sshpass -p "popcorn" ssh -o StrictHostKeyChecking=no  popcorn@10.4.4.$((100+${i})) "sudo insmod msg_socket.ko" &
 done
 
-# Define tests in an array
-declare -a tests=(
-  "./ft2a 0 1"
-  "./ft2b 0 1"
-  "./ft2c 0 1"
-  )
-
-sleep 20
 echo -e "Running tests\n=============="
-
-# A bit of a quick hacky way to run tests
-for i in "${tests[@]}"
-do
-  echo -e "\nTesting: "${i}
-  echo 'sshpass -p "popcorn" ssh -o StrictHostKeyChecking=no popcorn@10.4.4.100 "cd popcorn-lib/src && '${i}'"' > testscript && chmod +x testscript
-  ./testscript
-done
+cd /app
+ansible-playbook -e "ansible_ssh_pass=popcorn" popcorn_tests.yml
 
 # Wait at the end for interactive testing
 if ! [[ -z "$INTERACTIVE" ]]
