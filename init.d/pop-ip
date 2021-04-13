@@ -7,4 +7,4 @@
 # Default-Stop:
 # Short-Description: Set the popcorn IP addresses.
 ### END INIT INFO
-ifconfig $(ifconfig | grep eth | grep flags | cut -d ':' -f 1) $(cat /proc/cmdline | grep ip | cut -d '=' -f 4) netmask 255.255.255.0 up
+ifconfig $(ifconfig | grep eth | grep encap | cut -d ':' -f 1) $(cat /proc/cmdline | grep ip | cut -d '=' -f 4) netmask 255.255.255.0 up
