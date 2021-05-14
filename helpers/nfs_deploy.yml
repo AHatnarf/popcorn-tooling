@@ -1,0 +1,40 @@
+- name: "Check to see if all nodes are online"
+  hosts: all
+  remote_user: popcorn
+  vars:
+    ansible_become_pass: popcorn
+
+  tasks:
+    - name: "Test connection to all nodes"
+      ping:
+
+- name: "Mount the shared folder"
+  hosts: all
+  remote_user: popcorn
+
+  tasks:
+    - name: Mount directories
+      shell: sudo /home/popcorn/mount.sh
+      changed_when: False
+
+    - name: Copy nodes
+      shell: sudo cp /home/popcorn/test/nodes /etc/popcorn/nodes
+      changed_when: False
+
+- name: "Insert x86 modules"
+  hosts: x86
+  remote_user: popcorn
+
+  tasks:
+    - name: Insert Modules
+      shell: sudo insmod /home/popcorn/test/msg_socketx86.ko &
+      changed_when: False
+
+- name: "Insert ARM modules"
+  hosts: arm
+  remote_user: popcorn
+
+  tasks:
+    - name: Insert Modules
+      shell: sudo insmod /home/popcorn/test/msg_socketarm.ko &
+      changed_when: False

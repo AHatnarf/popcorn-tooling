@@ -1,67 +1,112 @@
 #!/bin/bash
 
 # Check to see if we have node count
-if ! [[ -z "$NUMNODES" ]]
+if ! [[ -z "$NUMx86" ]]
 then
   echo "Found x86 node count"
 else
-  NUMNODES=2
+  NUMx86=1
 fi
 
-echo "Number of x86 nodes: $NUMNODES"
-NUMNODES="$(($NUMNODES-1))"
+if ! [[ -z "$NUMARM" ]]
+then
+  echo "Found arm node count"
+else
+  NUMARM=1
+fi
 
-# Check for kvm support
-KVMFLAGS='-smp 2 -m 1024 -no-reboot -nographic -kernel /app/linux/arch/x86/boot/bzImage'
+echo "Number of x86 nodes: $NUMx86"
+echo "Number of arm nodes: $NUMARM"
+NUMNODES="$(($NUMx86-1))"
+NUMTOTAL="$((NUMx86+NUMARM))"
+echo "Total nodes: $NUMTOTAL"
+
+# Check for kvm support - removing -kernel /app/linux/arch/x86/boot/bzImage
+KVMFLAGS='-smp 2 -m 1024 -no-reboot -nographic'
+X86KVMFLAGS="$KVMFLAGS"
 if [ $(ls /dev | grep kvm | wc -l) -eq 1 ]; then
     echo "KVM found!"
-    KVMFLAGS="$KVMFLAGS -enable-kvm -cpu host"
+    X86KVMFLAGS="$KVMFLAGS -enable-kvm -cpu host"
     echo "KVM flags: $KVMFLAGS"
 fi
 
 # Run build tests
 echo "Compiling the kernel"
-cd linux #&& make clean -j$(nproc) &> /dev/null
+cd linux
+cp /app/configs/x86.config .config
 make CCACHE_DIR=/app/ccache CC="ccache gcc" -j$(nproc) &> /app/logs/kernel_compiliation
 EXITCODE=$?
-test $EXITCODE -eq 0 && echo "Kernel compiliation successful!" || exit -1;
+test $EXITCODE -eq 0 && echo "x86 compiliation successful!" || exit -2;
+mv /app/linux/msg_layer/msg_socket.ko /app/share/msg_socketx86.ko
+cp vmlinux x86.vmlinux
+ln -s /app/linux/scripts/gdb/vmlinux-gdb.py /app/linux/vmlinux-gdb.py > /dev/null 2>&1
 
-# Build msg_layer drivers
-echo "Building drivers/msg_layer drivers"
-cd drivers/msg_layer && make CCACHE_DIR=/app/ccache CC="ccache gcc" -j$(nproc) &> /app/logs/msg_compiliation
+# Arm compiliaition
+cd /app/linux
+cp /app/configs/arm.config .config
+ARCH="arm64" CROSS_COMPILE="aarch64-linux-gnu-" make CCACHE_DIR=/app/ccache CC="ccache aarch64-linux-gnu-gcc" -C . -j $(nproc) &> /app/logs/arm_kernel_compiliation
 EXITCODE=$?
-test $EXITCODE -eq 0 && echo "msg_layer compiliation successful!" || exit -2;
+#test test $EXITCODE -eq 0 && echo "Arm compiliation successful!" || exit -1;
+mv /app/linux/msg_layer/msg_socket.ko /app/share/msg_socketarm.ko
+cp vmlinux arm.vmlinux
 
 # Creating disks
 cd /app/disks
-for ((i=0; i <= $NUMNODES; i++)); do
-  qemu-img create -f qcow2 -o backing_file=base.img ${i}.img > /dev/null
+for ((i=0; i<$NUMx86; i++)); do
+  qemu-img create -f qcow2 -o backing_file=base_x86.img ${i}.img > /dev/null
 done
 
+for ((i=$NUMx86; i<$NUMTOTAL; i++)); do
+  qemu-img create -f qcow2 -o backing_file=base_arm.img ${i}.img > /dev/null
+done
+
+
 # Create nodes list
-echo "" > /app/nodes
-for ((i=0; i <= $NUMNODES; i++)); do
+touch /app/nodes
+for ((i=0; i <= $((NUMNODES+NUMARM)); i++)); do
   echo "10.4.4.$(($i+100))" >> /app/nodes
 done
 
 sudo mkdir -p /etc/ansible
-sudo cp /app/nodes /etc/ansible/hosts
+echo "[x86]" > ansible_hosts
+for ((i=0; i<$NUMx86; i++)); do
+  echo "10.4.4.$(($i+100))" >> ansible_hosts
+done
+
+echo "" >> ansible_hosts
+echo "[arm]" >> ansible_hosts
+
+for ((i=$NUMx86; i<$NUMTOTAL; i++)); do
+  echo "10.4.4.$(($i+100))" >> ansible_hosts
+done
+sudo mv ansible_hosts /etc/ansible/hosts
 
 # Start Virtual Machines & Networking
 echo "Starting virtual machines"
 sudo brctl addbr br0
 sudo ifconfig br0 10.4.4.1 netmask 255.255.255.0
+rm /home/popcorn-dev/.ssh/known_hosts > /dev/null 2>&1
 
 cd /app
-for ((i=0; i <= $NUMNODES; i++)); do
-  echo 'sudo qemu-system-x86_64 '${KVMFLAGS}' -gdb tcp::123'${i}' -drive id=root,media=disk,file=/app/disks/'${i}'.img -net nic,macaddr=00:da:bc:de:00:1'$((3+${i}))' -net tap,ifname=tap'${i}' -append "root=/dev/sda1 console=ttyS0 ip=10.4.4.'$((100+${i}))'" 2>&1 | tee /app/logs/vm'${i} > launchVM${i}.sh
+for ((i=0; i<$NUMx86; i++)); do
+  echo 'sudo qemu-system-x86_64 '${X86KVMFLAGS}' -kernel /app/linux/arch/x86_64/boot/bzImage -gdb tcp::123'${i}' -drive id=root,if=none,media=disk,file=disk,file=/app/disks/'${i}'.img -device virtio-blk-pci,drive=root -net nic,model=virtio,macaddr=00:da:bc:de:00:1'$((3+${i}))' -net tap,ifname=tap'${i}' -append "root=/dev/vda1 console=ttyS0 ip=10.4.4.'$((100+${i}))' nokaslr" 2>&1 | tee /app/logs/vm'${i} > launchVM${i}.sh
   chmod +x launchVM${i}.sh && screen -S ${i} -d -m ./launchVM${i}.sh
+  echo "Starting X86: $i"
+done
+
+cd /app
+for ((i=$NUMx86; i<$NUMTOTAL; i++)); do
+  #echo 'sudo qemu-system-aarch64 '${KVMFLAGS}'  -machine virt -cpu cortex-a57 -kernel /app/linux/arch/arm64/boot/Image -gdb tcp::123'${i}' -drive id=root,if=none,media=disk,file=/app/disks/base_arm.img -device virtio-blk-device,drive=root -netdev type=tap,id=tap'${i}'  -device virtio-net-device,netdev=tap'${i}',mac=00:da:bc:de:00:1'$((3+${i}))' -append "root=/dev/vda console=ttyAMA0 ip=10.4.4.'$((100+${i}))'" 2>&1 | tee /app/logs/vm'${i} > launchVM${i}.sh 
+  echo 'sudo qemu-system-aarch64 '${KVMFLAGS}'  -machine virt -cpu cortex-a57 -kernel /app/linux/arch/arm64/boot/Image -gdb tcp::123'${i}' -drive id=root,if=none,media=disk,file=/app/disks/'${i}'.img -device virtio-blk-device,drive=root -netdev type=tap,id=tap'${i}'  -device virtio-net-device,netdev=tap'${i}',mac=00:da:bc:de:00:1'$((3+${i}))' -append "root=/dev/vda console=ttyAMA0 ip=10.4.4.'$((100+${i}))'" 2>&1 | tee /app/logs/vm'${i} > launchVM${i}.sh 
+  chmod +x launchVM${i}.sh && screen -S ${i} -d -m ./launchVM${i}.sh
+  echo "Starting ARM: $i"
 done
 
 sleep 2
 
-for ((i=0; i <= $NUMNODES; i++)); do
+for ((i=0; i < $NUMTOTAL; i++)); do
   sudo brctl addif br0 tap${i}
+  sudo ifconfig tap${i} up
   EXITCODE=$?
   test $EXITCODE -eq 0 && echo "Node "${i}" started!" || exit 10;
 done
@@ -75,7 +120,7 @@ EXITCODE=$?
 test $EXITCODE -eq 0 && echo "Popcorn-lib compiliation successful!" || exit -3;
 
 # Wait for both Virtual Machines to start
-for ((i=0; i <= $NUMNODES; i++)); do
+for ((i=0; i<$NUMTOTAL; i++)); do
   while ! (exec 3<>/dev/tcp/10.4.4.$((100+${i}))/22) &> /dev/null
   do
     echo "Waiting for node "${i}" to come online" && sleep 2
@@ -85,24 +130,21 @@ done
 sleep 2
 
 # Set up NFS server
-echo "/app/share 10.4.4.0/24(rw,fsid=0,insecure,no_subtree_check,async)" | sudo tee -a /etc/exports
 sudo service rpcbind restart
 sudo service nfs-kernel-server restart
 
-# Trust fingerprint of each node
-for ((i=0; i <= $NUMNODES; i++)); do
+# Trust fingerprint of each node & add in mount helper script for now
+for ((i=0; i<$NUMTOTAL; i++)); do
   sshpass -p "popcorn" ssh -o StrictHostKeyChecking=no  popcorn@10.4.4.$((100+${i})) "mkdir /home/popcorn/test"
+  sshpass -p "popcorn" scp /app/mount.sh popcorn@10.4.4.$((100+${i})):/home/popcorn/
 done
 
 
 # Set up files in VMs
 cd /app
-cp -r /app/popcorn-lib /app/share/popcorn-lib
 mv /app/nodes /app/share/nodes
-cp /app/linux/drivers/msg_layer/msg_socket.ko /app/share/msg_socket.ko
-
+sleep 3
 ansible-playbook -e "ansible_ssh_pass=popcorn" nfs_deploy.yml
-
 
 # Run tests
 echo -e "Running tests\n=============="

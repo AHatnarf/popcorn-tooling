@@ -1,0 +1,18 @@
+- name: "Check to see if all nodes are online"
+  hosts: all
+  remote_user: popcorn
+  vars:
+    ansible_become_pass: popcorn
+
+  tasks:
+    - name: "Test connection to all nodes"
+      ping:
+
+- name: "Run functional test from node 0"
+  hosts: 10.4.4.100
+  remote_user: popcorn
+
+  tasks:
+    - name: Check to see if node0 is online
+      shell: pwd
+      changed_when: False
