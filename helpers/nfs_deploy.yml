@@ -38,3 +38,13 @@
     - name: Insert Modules
       shell: sudo insmod /home/popcorn/test/msg_socketarm.ko &
       changed_when: False
+
+- name: "Add route to internet"
+  hosts: all
+  remote_user: popcorn
+  vars:
+    ansible_become_pass: popcorn
+  tasks:
+    - name: Route all IP through the container
+      shell: sudo route add default gw 10.4.4.1
+      changed_when: False

@@ -132,6 +132,7 @@ sleep 2
 # Set up NFS server
 sudo service rpcbind restart
 sudo service nfs-kernel-server restart
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
 # Trust fingerprint of each node & add in mount helper script for now
 for ((i=0; i<$NUMTOTAL; i++)); do
@@ -139,6 +140,15 @@ for ((i=0; i<$NUMTOTAL; i++)); do
   sshpass -p "popcorn" scp /app/mount.sh popcorn@10.4.4.$((100+${i})):/home/popcorn/
 done
 
+# Set up GDB instances for two nodes - NOTE this isn't officially supported
+cd /app/linux && echo 'add-auto-load-safe-path /app/linux/scripts/gdb/vmlinux-gdb.py' \
+  | sudo tee -a /root/.gdbinit && \
+  screen -d -m -S arm_gdb sudo gdb-multiarch vmlinux -ex "lx-symbols" -ex "target remote :1231" -ex "c"
+
+sleep 7
+
+cd /app/linux && sudo cp x86.vmlinux vmlinux && \
+  screen -d -m -S x86_gdb sudo gdb-multiarch vmlinux -ex "lx-symbols" -ex "target remote :1230" -ex "c"
 
 # Set up files in VMs
 cd /app
