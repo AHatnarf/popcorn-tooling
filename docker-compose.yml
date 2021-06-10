@@ -1,5 +1,5 @@
 test:
-  image: ahughes12/popcorn-base
+  image: ahughes12/popcorn-base:iptables
   devices:
     - /dev/net/tun
     - /dev/kvm
