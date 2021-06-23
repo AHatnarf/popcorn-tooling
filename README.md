@@ -24,3 +24,7 @@ Running docker images can be checked with `docker ps`. Once you have the name of
 GDB is made available in the two_nodes branch as an example. It spawns a screen for gdb to interact with the x86 node. Note that there is a bit of shuffling around vmlinuz files for x86 and arm when using gdb.
 
 Additionally all console logs & stdout from the boot terminal will be stored in the logs folder. Other stages such as kernel, driver, and library compiliation will be stored in that folder.
+
+
+## Modifying automated tests/functionality
+Within the helpers folder there are two Ansible playbook files, nfs_deploy.yml and popcorn_tests.yml. With both groups of x86 nodes, arm nodes, a single node, or all nodes can be targeted for commands/other functionality. The nfs_deploy.yml is intended to mount an nfs server from the container to the VMs (reducing overhead from SCPing files live). It also will attempt to mount the msg_socket kernel module. The popcorn_tests.yml can be exapnded to start tests from specific nodes and get otuput reported back. 
